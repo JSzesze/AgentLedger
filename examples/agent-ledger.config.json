@@ -1,0 +1,31 @@
+{
+  "description": "Copy to your app repo as .agent-ledger/config.json to tune target-surface checks in monorepos.",
+  "version": 1,
+  "targetSurface": {
+    "explicitNamePatterns": [
+      "\\bweb\\b",
+      "\\bmobile\\b",
+      "(admin|web admin)",
+      "(next\\.?js|expo|ios|android|convex|backend|api)"
+    ],
+    "surfaces": [
+      {
+        "id": "web_admin",
+        "label": "the Next.js web admin area",
+        "pathPrefixes": ["web/"],
+        "pathIncludes": ["/(admin)/", "Admin"]
+      },
+      {
+        "id": "mobile",
+        "label": "the mobile app (Expo)",
+        "pathPrefixes": ["app/"],
+        "pathIncludes": ["features/"]
+      },
+      {
+        "id": "convex",
+        "label": "the Convex / backend",
+        "pathPrefixes": ["convex/"]
+      }
+    ]
+  }
+}
