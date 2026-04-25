@@ -57,28 +57,28 @@ export async function runCommand(raw: RunCommandOptions) {
 
   const result = await runInterpretationPhase(base, false);
 
-  if (o.json) {
-    printJson({
-      stage: "interpret",
-      runId: result.archive.runId,
-      archive: result.archive.dir,
-      confidence: result.workOrder.confidence,
-      blockingQuestions: result.workOrder.openQuestions,
-      shouldStopForClarity: result.shouldStopForClarity,
-      next:
-        result.shouldStopForClarity
-          ? "Clarity gate: reply on the issue and rerun, or change --clarity."
-          : !o.yes
-            ? "Re-run with --yes to run the coding agent, or use `agent-ledger execute --run-id <runId> --repo <path>`. "
-            : "Running coding agent.",
-    });
-  } else {
-    console.log(`AgentLedger run ${result.archive.runId}`);
-    console.log(`Archive: ${result.archive.dir}`);
-    console.log(`Interpretation confidence: ${result.workOrder.confidence}`);
-  }
+  // In JSON mode, emit one document at the end so scripts can parse stdout directly.
 
   if (result.shouldStopForClarity) {
+    if (o.json) {
+      printJson({
+        ok: true,
+        command: "run",
+        runId: result.archive.runId,
+        archive: result.archive.dir,
+        repoPath: result.repoPath,
+        dryRun: Boolean(o.dryRun),
+        preflight: result.preflight,
+        interpretation: {
+          confidence: result.workOrder.confidence,
+          blockingQuestions: result.workOrder.openQuestions,
+          shouldStopForClarity: true,
+          postStatus: result.postStatus,
+        },
+        execution: null,
+        next: "Clarity gate: reply on the issue and rerun, or change --clarity.",
+      });
+    }
     if (!o.json) {
       console.log("Cursor was not launched because AgentLedger stopped at the clarity gate.");
     }
@@ -86,7 +86,51 @@ export async function runCommand(raw: RunCommandOptions) {
     return;
   }
 
+  if (o.dryRun) {
+    const next = `agent-ledger execute --run-id ${result.archive.runId} --repo ${result.repoPath}`;
+    if (o.json) {
+      printJson({
+        ok: true,
+        command: "run",
+        runId: result.archive.runId,
+        archive: result.archive.dir,
+        repoPath: result.repoPath,
+        dryRun: true,
+        preflight: result.preflight,
+        interpretation: {
+          confidence: result.workOrder.confidence,
+          blockingQuestions: result.workOrder.openQuestions,
+          shouldStopForClarity: false,
+          postStatus: result.postStatus,
+        },
+        execution: null,
+        next,
+      });
+    } else {
+      console.log("Dry run: coding agent, checks, and GitHub posting were skipped.");
+      console.log(`When ready: ${next}`);
+    }
+    return;
+  }
+
   if (o.json && !o.yes) {
+    printJson({
+      ok: true,
+      command: "run",
+      runId: result.archive.runId,
+      archive: result.archive.dir,
+      repoPath: result.repoPath,
+      dryRun: false,
+      preflight: result.preflight,
+      interpretation: {
+        confidence: result.workOrder.confidence,
+        blockingQuestions: result.workOrder.openQuestions,
+        shouldStopForClarity: false,
+        postStatus: result.postStatus,
+      },
+      execution: null,
+      next: "Re-run with --yes to run the coding agent, or use `agent-ledger execute --run-id <runId> --repo <path>`.",
+    });
     return;
   }
 
@@ -102,5 +146,23 @@ export async function runCommand(raw: RunCommandOptions) {
     }
   }
 
-  await runExecutionPhase({ raw: base, interpret: result });
+  const execution = await runExecutionPhase({ raw: base, interpret: result });
+  if (o.json) {
+    printJson({
+      ok: execution.ok,
+      command: "run",
+      runId: result.archive.runId,
+      archive: result.archive.dir,
+      repoPath: result.repoPath,
+      dryRun: false,
+      preflight: result.preflight,
+      interpretation: {
+        confidence: result.workOrder.confidence,
+        blockingQuestions: result.workOrder.openQuestions,
+        shouldStopForClarity: false,
+        postStatus: result.postStatus,
+      },
+      execution,
+    });
+  }
 }

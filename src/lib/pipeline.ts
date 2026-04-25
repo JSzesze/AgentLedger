@@ -17,6 +17,7 @@ import { buildRunMeta, readRunMetaFile, writeRunMeta } from "./runMeta.js";
 import { captureChangedFiles, captureDiff, captureGitStatus } from "./git.js";
 import {
   getIssueContext,
+  hasGithubCommentLogType,
   postIssueComment,
   resolveIssueRef,
   writeGithubCommentLog,
@@ -39,7 +40,6 @@ import {
   writeWorkOrderFiles,
 } from "./workOrder.js";
 import { tryParseWorkOrderJson } from "./workOrderSchema.js";
-import { printJson } from "./cliOutput.js";
 import type { BasePipelineOptions } from "./types.js";
 import { z } from "zod";
 
@@ -69,6 +69,19 @@ export type InterpretPipelineResult = {
   issue: Awaited<ReturnType<typeof getIssueContext>>;
   repoPath: string;
   shouldStopForClarity: boolean;
+  preflight?: Awaited<ReturnType<typeof runPreflight>>;
+  postStatus: CommentPostStatus;
+};
+
+export type CommentPostStatus = "posted" | "skipped_dry_run" | "skipped_no_post" | "skipped_duplicate";
+
+export type ExecutionPipelineResult = {
+  ok: boolean;
+  summaryFile: string;
+  agentFailed: boolean;
+  checkFailed: boolean;
+  failureReason?: string;
+  postStatus: CommentPostStatus;
 };
 
 /**
@@ -85,11 +98,11 @@ export async function runInterpretationPhase(
   }
 
   const repoPath = await realpath(options.repo);
+  let preflight: Awaited<ReturnType<typeof runPreflight>> | undefined;
   if (options.doctor !== false) {
     const pre = await runPreflight({ issue: options.issue, repo: repoPath });
-    if (options.json) {
-      printJson({ stage: "doctor", preflight: pre });
-    } else {
+    preflight = pre;
+    if (!options.json) {
       printPreflightHuman(pre);
     }
     if (!pre.ok) {
@@ -146,8 +159,8 @@ export async function runInterpretationPhase(
       interpretationFile: archive.interpretationFile,
       workOrderFile: archive.workOrderFile,
       cursorPromptFile: archive.cursorPromptFile,
-      willRun: interpretOnly ? false : !shouldStopForClarity,
-      nextRunIdForFooter: interpretOnly ? archive.runId : undefined,
+      willRun: interpretOnly || options.dryRun ? false : !shouldStopForClarity,
+      nextRunIdForFooter: interpretOnly || options.dryRun ? archive.runId : undefined,
     }),
     captureGitStatus(repoPath, archive.gitStatusBeforeFile),
   ]);
@@ -165,25 +178,33 @@ export async function runInterpretationPhase(
   });
   await writeRunMeta(archive, meta);
 
-  const shouldPost = options.post !== false && !options.dryRun;
-  if (shouldPost) {
+  let postStatus: CommentPostStatus = options.dryRun
+    ? "skipped_dry_run"
+    : options.post === false
+      ? "skipped_no_post"
+      : "posted";
+  if (postStatus === "posted") {
     const duplicateWarning = hasAgentLedgerInterpretationComment(issue);
     if (duplicateWarning && !options.json) {
       console.warn("Warning: the issue already has an AgentLedger interpretation comment. This run will add another.");
     }
-    await postIssueComment({
-      owner: issue.owner,
-      repo: issue.repo,
-      issueNumber: issue.issueNumber,
-      bodyFile: archive.interpretationFile,
-    });
-    await writeGithubCommentLog(archive.githubCommentsFile, [
-      {
-        type: "interpretation",
+    if (await hasGithubCommentLogType(archive.githubCommentsFile, "interpretation")) {
+      postStatus = "skipped_duplicate";
+    } else {
+      await postIssueComment({
+        owner: issue.owner,
+        repo: issue.repo,
+        issueNumber: issue.issueNumber,
         bodyFile: archive.interpretationFile,
-        postedAt: new Date().toISOString(),
-      },
-    ]);
+      });
+      await writeGithubCommentLog(archive.githubCommentsFile, [
+        {
+          type: "interpretation",
+          bodyFile: archive.interpretationFile,
+          postedAt: new Date().toISOString(),
+        },
+      ]);
+    }
   }
 
   if (!options.json) {
@@ -199,6 +220,8 @@ export async function runInterpretationPhase(
     issue,
     repoPath,
     shouldStopForClarity: interpretOnly ? true : shouldStopForClarity,
+    preflight,
+    postStatus,
   };
 }
 
@@ -208,9 +231,9 @@ export async function runInterpretationPhase(
 export async function runExecutionPhase(args: {
   raw: BasePipelineOptions;
   interpret: Pick<InterpretPipelineResult, "workOrder" | "archive" | "issue" | "repoPath">;
-}): Promise<void> {
+}): Promise<ExecutionPipelineResult> {
   const options = baseSchema.parse(args.raw);
-  await runCodingAndReportPhase({
+  return await runCodingAndReportPhase({
     options,
     workOrder: args.interpret.workOrder,
     archive: args.interpret.archive,
@@ -225,7 +248,7 @@ async function runCodingAndReportPhase(args: {
   archive: RunArchive;
   issue: IssueContext;
   repoPath: string;
-}): Promise<void> {
+}): Promise<ExecutionPipelineResult> {
   const options = args.options;
   const { workOrder, archive, issue, repoPath } = args;
 
@@ -282,38 +305,53 @@ async function runCodingAndReportPhase(args: {
     failureReason,
   });
 
-  const shouldPost = options.post !== false && !options.dryRun;
-  if (shouldPost) {
-    await postIssueComment({
-      owner: issue.owner,
-      repo: issue.repo,
-      issueNumber: issue.issueNumber,
-      bodyFile: archive.summaryFile,
-    });
-    await writeGithubCommentLog(archive.githubCommentsFile, [
-      {
-        type: agentFailed ? "failed" : checkFailed ? "completed_with_check_failures" : "completed",
+  const completionType = agentFailed ? "failed" : checkFailed ? "completed_with_check_failures" : "completed";
+  let postStatus: CommentPostStatus = options.dryRun
+    ? "skipped_dry_run"
+    : options.post === false
+      ? "skipped_no_post"
+      : "posted";
+  if (postStatus === "posted") {
+    const completionTypes = ["failed", "completed_with_check_failures", "completed"];
+    const alreadyPosted = (
+      await Promise.all(
+        completionTypes.map((type) => hasGithubCommentLogType(archive.githubCommentsFile, type))
+      )
+    ).some(Boolean);
+    if (alreadyPosted) {
+      postStatus = "skipped_duplicate";
+    } else {
+      await postIssueComment({
+        owner: issue.owner,
+        repo: issue.repo,
+        issueNumber: issue.issueNumber,
         bodyFile: archive.summaryFile,
-        postedAt: new Date().toISOString(),
-      },
-    ]);
+      });
+      await writeGithubCommentLog(archive.githubCommentsFile, [
+        {
+          type: completionType,
+          bodyFile: archive.summaryFile,
+          postedAt: new Date().toISOString(),
+        },
+      ]);
+    }
   }
 
-  if (options.json) {
-    printJson({
-      ok: !agentFailed && !checkFailed,
-      summaryFile: archive.summaryFile,
-      agentFailed,
-      checkFailed,
-      failureReason,
-    });
-  } else {
+  if (!options.json) {
     console.log(`Summary: ${archive.summaryFile}`);
   }
 
   if (agentFailed || checkFailed) {
     process.exitCode = 1;
   }
+  return {
+    ok: !agentFailed && !checkFailed,
+    summaryFile: archive.summaryFile,
+    agentFailed,
+    checkFailed,
+    failureReason,
+    postStatus,
+  };
 }
 
 export async function maybePromptContinue(args: { json?: boolean; yes?: boolean }): Promise<boolean> {
@@ -347,7 +385,16 @@ export async function executeFromRunId(args: {
   verbose?: boolean;
   json?: boolean;
   doctor?: boolean;
-}): Promise<void> {
+}): Promise<{
+  ok: boolean;
+  runId: string;
+  archive: string;
+  repoPath: string;
+  dryRun: boolean;
+  preflight?: Awaited<ReturnType<typeof runPreflight>>;
+  execution?: ExecutionPipelineResult;
+  next?: string;
+}> {
   const repoPath = await realpath(args.repo);
   const archive = buildRunArchivePaths(repoPath, args.runId);
   if (!existsSync(archive.runMetaFile) || !existsSync(archive.workOrderFile)) {
@@ -355,13 +402,13 @@ export async function executeFromRunId(args: {
       `No AgentLedger run found at ${archive.dir}. Check --run-id and --repo, or run \`agent-ledger interpret\` first.`
     );
   }
+  let preflight: Awaited<ReturnType<typeof runPreflight>> | undefined;
   if (args.doctor !== false) {
     const metaPreview = await readRunMetaFile(archive.runMetaFile);
     const issueUrl = `https://github.com/${metaPreview.issue.owner}/${metaPreview.issue.repo}/issues/${metaPreview.issue.issueNumber}`;
     const pre = await runPreflight({ issue: issueUrl, repo: repoPath });
-    if (args.json) {
-      printJson({ stage: "doctor", preflight: pre });
-    } else {
+    preflight = pre;
+    if (!args.json) {
       printPreflightHuman(pre);
     }
     if (!pre.ok) {
@@ -373,9 +420,11 @@ export async function executeFromRunId(args: {
 
   const meta = await readRunMetaFile(archive.runMetaFile);
   if (path.resolve(meta.repoPath) !== path.resolve(repoPath)) {
-    console.warn(
-      `Warning: run-meta.json repoPath (${meta.repoPath}) differs from --repo (${repoPath}). Using current --repo.`
-    );
+    if (!args.json) {
+      console.warn(
+        `Warning: run-meta.json repoPath (${meta.repoPath}) differs from --repo (${repoPath}). Using current --repo.`
+      );
+    }
   }
 
   const issue = await getIssueContext({
@@ -408,7 +457,32 @@ export async function executeFromRunId(args: {
     console.log(`Archive: ${archive.dir}`);
   }
 
-  await runCodingAndReportPhase({ options, workOrder, archive, issue, repoPath });
+  if (args.dryRun) {
+    if (!args.json) {
+      console.log("Dry run: coding agent, checks, and GitHub posting were skipped.");
+      console.log(`When ready: agent-ledger execute --run-id ${args.runId} --repo ${repoPath}`);
+    }
+    return {
+      ok: true,
+      runId: args.runId,
+      archive: archive.dir,
+      repoPath,
+      dryRun: true,
+      preflight,
+      next: `agent-ledger execute --run-id ${args.runId} --repo ${repoPath}`,
+    };
+  }
+
+  const execution = await runCodingAndReportPhase({ options, workOrder, archive, issue, repoPath });
+  return {
+    ok: execution.ok,
+    runId: args.runId,
+    archive: archive.dir,
+    repoPath,
+    dryRun: false,
+    preflight,
+    execution,
+  };
 }
 
 async function buildWorkOrderWithConfig(args: {

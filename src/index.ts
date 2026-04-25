@@ -30,19 +30,21 @@ function collect(value: string, previous: string[]) {
   return previous;
 }
 
-function rethrowError(error: unknown) {
-  if (
+function rethrowError(error: unknown, options: { json?: boolean } = {}) {
+  const message = error instanceof Error ? error.message : String(error);
+  const exitCode =
     error &&
     typeof error === "object" &&
     "exitCode" in error &&
     typeof (error as { exitCode: number }).exitCode === "number"
-  ) {
-    process.exitCode = (error as { exitCode: number }).exitCode;
-    return;
+      ? (error as { exitCode: number }).exitCode
+      : 1;
+  if (options.json) {
+    console.log(JSON.stringify({ ok: false, error: message }, null, 2));
+  } else {
+    console.error(`agent-ledger: ${message}`);
   }
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`agent-ledger: ${message}`);
-  process.exitCode = 1;
+  process.exitCode = exitCode;
 }
 
 function mapNoDoctor(options: { noDoctor?: boolean; doctor?: boolean }): { doctor: boolean } {
@@ -64,7 +66,7 @@ function addRunCommand() {
       "Fix the issue described here"
     )
     .option("--check <command>", "Command to run after agent work. Repeatable.", collect, [] as string[])
-    .option("--dry-run", "Do not post comments to GitHub", false)
+    .option("--dry-run", "Preview only: write interpretation archive, skip coding agent, checks, and GitHub posting", false)
     .option("--no-post", "Do not post comments to GitHub")
     .option("--runtime <runtime>", "local | cloud", "local")
     .option(
@@ -93,7 +95,14 @@ function addRunCommand() {
 
   cmd.addHelpText(
     "after",
-    "\nExit codes: 0 success, 1 error, 2 clarity gate (no coding run).\n"
+    `
+Examples:
+  agent-ledger run --issue https://github.com/org/repo/issues/184 --repo /path/to/repo --yes --json --no-post
+  agent-ledger run --issue 184 --repo /path/to/repo --check "npm test" --check "npm run typecheck"
+  agent-ledger run --issue 184 --repo /path/to/repo --dry-run --json
+
+Exit codes: 0 success, 1 error, 2 clarity gate (no coding run).
+`
   );
 
   cmd.action(async (raw: Record<string, unknown>) => {
@@ -106,7 +115,7 @@ function addRunCommand() {
       } as RunCommandOptions;
       await runCommand(opts);
     } catch (error) {
-      rethrowError(error);
+      rethrowError(error, { json: Boolean(raw.json) });
     }
   });
 }
@@ -128,7 +137,7 @@ function addInterpretCommand() {
       collect,
       [] as string[]
     )
-    .option("--dry-run", "Do not post interpretation to GitHub", false)
+    .option("--dry-run", "Write local interpretation archive but do not post to GitHub", false)
     .option("--no-post", "Do not post comments to GitHub")
     .option("--runtime <runtime>", "local | cloud", "local")
     .option("--clarity <mode>", "Affects work-order wording in some cases", "auto")
@@ -147,13 +156,22 @@ function addInterpretCommand() {
     .option("--verbose", "Print interpreter details", false)
     .option("--json", "JSON output", false)
     .option("--no-doctor", "Skip preflight", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  agent-ledger interpret --issue https://github.com/org/repo/issues/184 --repo /path/to/repo --json
+  agent-ledger interpret --issue 184 --repo /path/to/repo --check "npm test" --no-post
+  agent-ledger execute --run-id <run-id> --repo /path/to/repo --no-post
+`
+    )
     .action(async (raw: Record<string, unknown>) => {
       try {
         const { noDoctor, ...rest } = raw;
         const doctor = noDoctor ? false : (rest as { doctor?: boolean }).doctor !== false;
         await interpretCommand({ ...rest, doctor, json: raw.json as boolean | undefined });
       } catch (error) {
-        rethrowError(error);
+        rethrowError(error, { json: Boolean(raw.json) });
       }
     });
 }
@@ -171,19 +189,28 @@ function addExecuteCommand() {
       collect,
       [] as string[]
     )
-    .option("--dry-run", "Do not post completion comment", false)
+    .option("--dry-run", "Preview resume target without launching the coding agent, checks, or posting", false)
     .option("--no-post", "Do not post the completion comment to GitHub")
     .option("--cursor-model <model>", "Override the stored model for coding")
     .option("--verbose", "Print agent details", false)
     .option("--json", "JSON output", false)
     .option("--no-doctor", "Skip preflight", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  agent-ledger execute --run-id 20260102-120000-issue-184 --repo /path/to/repo --json
+  agent-ledger execute --run-id 20260102-120000-issue-184 --repo /path/to/repo --check "npm test" --no-post
+  agent-ledger execute --run-id 20260102-120000-issue-184 --repo /path/to/repo --dry-run --json
+`
+    )
     .action(async (raw: Record<string, unknown>) => {
       try {
         const { noDoctor, ...rest } = raw;
         const doctor = noDoctor ? false : (rest as { doctor?: boolean }).doctor !== false;
         await executeCommandOnly({ ...rest, doctor });
       } catch (error) {
-        rethrowError(error);
+        rethrowError(error, { json: Boolean(raw.json) });
       }
     });
 }
@@ -203,6 +230,14 @@ function addRunsCommand() {
       (v) => parseInt(v, 10),
       200
     )
+    .addHelpText(
+      "after",
+      `
+Examples:
+  agent-ledger runs list --repo /path/to/repo
+  agent-ledger runs list --repo /path/to/repo --limit 20 --json
+`
+    )
     .action(async (raw: { repo: string; json?: boolean; limit?: number }) => {
       try {
         const limit =
@@ -211,7 +246,7 @@ function addRunsCommand() {
             : Math.min(500, Math.max(1, raw.limit));
         await runsListCommand({ repo: raw.repo, json: Boolean(raw.json), limit });
       } catch (error) {
-        rethrowError(error);
+        rethrowError(error, { json: Boolean(raw.json) });
       }
     });
 }
@@ -228,11 +263,20 @@ function addDoctorCommand() {
       false
     )
     .option("--json", "JSON output", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  agent-ledger doctor
+  agent-ledger doctor --repo /path/to/repo --issue 184 --json
+  agent-ledger doctor --repo /path/to/repo --fail-on-dirty
+`
+    )
     .action(async (raw) => {
       try {
         await doctorCommand(raw);
       } catch (error) {
-        rethrowError(error);
+        rethrowError(error, { json: Boolean(raw.json) });
       }
     });
 }

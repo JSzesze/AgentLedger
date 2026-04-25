@@ -49,10 +49,16 @@ export async function interpretCommand(raw: unknown) {
   if (o.json) {
     printJson({
       ok: true,
+      command: "interpret",
       runId: result.archive.runId,
       archive: result.archive.dir,
+      repoPath: result.repoPath,
+      dryRun: Boolean(o.dryRun),
+      preflight: result.preflight,
       confidence: result.workOrder.confidence,
       blockingQuestions: result.workOrder.openQuestions,
+      postStatus: result.postStatus,
+      next: `agent-ledger execute --run-id ${result.archive.runId} --repo ${result.repoPath}`,
     });
   } else {
     console.log("Interpretation only — coding agent was not run.");

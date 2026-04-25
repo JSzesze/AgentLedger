@@ -23,14 +23,17 @@
   },
   "files": [
     "dist",
+    "docs",
+    "skills",
     "README.md",
+    "ROADMAP.md",
     "LICENSE"
   ],
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit",
     "prepack": "npm run build"
   },

@@ -4,7 +4,7 @@ AgentLedger turns messy GitHub issues into **structured work orders** using Curs
 
 **Source:** [github.com/JSzesze/AgentLedger](https://github.com/JSzesze/AgentLedger). **License:** MIT. **Third party:** the CLI depends on [`@cursor/february`](https://www.npmjs.com/package/@cursor/february) and your `CURSOR_API_KEY` — see Cursor’s [terms](https://cursor.com/terms-of-service). This repo is source-first: clone, `npm install`, and `npm run build`.
 
-- Docs: [Quickstart](docs/quickstart.md) · [Commands](docs/commands.md) · [OpenClaw](docs/openclaw.md) · [Archive contract](docs/archive-contract.md) (paper trail layout) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+- Docs: [Quickstart](docs/quickstart.md) · [Commands](docs/commands.md) · [OpenClaw](docs/openclaw.md) · [Roadmap](ROADMAP.md) · [Archive contract](docs/archive-contract.md) (paper trail layout) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 - Optional per-app config for monorepos: copy [examples/agent-ledger.config.json](examples/agent-ledger.config.json) to **your app repo** at `.agent-ledger/config.json` (not required for simple repos).
 
 ## Install
@@ -44,7 +44,7 @@ AGENT_LEDGER_CURSOR_MODEL=composer-2
 | `execute` | Resume coding with `--run-id` from a previous `interpret` |
 | `run` | Full flow: preflight → interpret → optional local **approval** (unless `--yes`) → coding run → post |
 
-**Automation / OpenClaw:** use `--json` and `--yes` for non-interactive full runs, or `interpret` then `execute`. See [docs/openclaw.md](docs/openclaw.md).
+**Automation / OpenClaw:** use `--json` and `--yes` for non-interactive full runs, or `interpret` then `execute`. JSON mode emits one parseable object per command. See [docs/openclaw.md](docs/openclaw.md).
 
 ## Usage
 
@@ -63,6 +63,12 @@ agent-ledger run \
 
 ```bash
 agent-ledger run --issue ... --repo ... --yes --json --no-post
+```
+
+**Preview without launching the coding agent:**
+
+```bash
+agent-ledger run --issue ... --repo ... --dry-run --json
 ```
 
 **Split interpret + code:**

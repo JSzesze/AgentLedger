@@ -113,9 +113,23 @@ export async function postIssueComment(args: {
 }
 
 export async function writeGithubCommentLog(file: string, comments: Array<Record<string, unknown>>) {
-  const existing = JSON.parse(await readFile(file, "utf8")) as Array<Record<string, unknown>>;
+  const existing = await readGithubCommentLog(file);
   existing.push(...comments);
   await writeFile(file, `${JSON.stringify(existing, null, 2)}\n`);
+}
+
+export async function readGithubCommentLog(file: string): Promise<Array<Record<string, unknown>>> {
+  try {
+    const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
+    return Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function hasGithubCommentLogType(file: string, type: string): Promise<boolean> {
+  const comments = await readGithubCommentLog(file);
+  return comments.some((comment) => comment.type === type);
 }
 
 async function getGitHubRemote(repoPath: string): Promise<Pick<IssueRef, "owner" | "repo">> {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { executeFromRunId } from "../lib/pipeline.js";
+import { printJson } from "../lib/cliOutput.js";
 
 const optionsSchema = z.object({
   runId: z.string().min(1),
@@ -16,7 +17,7 @@ const optionsSchema = z.object({
 
 export async function executeCommandOnly(raw: unknown) {
   const o = optionsSchema.parse(raw);
-  await executeFromRunId({
+  const result = await executeFromRunId({
     runId: o.runId,
     repo: o.repo,
     prompt: o.prompt,
@@ -28,4 +29,7 @@ export async function executeCommandOnly(raw: unknown) {
     json: o.json,
     doctor: o.doctor,
   });
+  if (o.json) {
+    printJson({ command: "execute", ...result });
+  }
 }
