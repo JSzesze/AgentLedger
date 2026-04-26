@@ -4,6 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
+  agent-ledger-openclaw.sh check
   agent-ledger-openclaw.sh preview
   agent-ledger-openclaw.sh run
   agent-ledger-openclaw.sh interpret
@@ -27,6 +28,7 @@ Optional environment variables:
   AGENT_LEDGER_CURSOR_MODEL Override coding model
 
 Examples:
+  ./agent-ledger-openclaw.sh check
   AGENT_LEDGER_ISSUE=https://github.com/org/repo/issues/184 AGENT_LEDGER_REPO=/repo ./agent-ledger-openclaw.sh preview
   AGENT_LEDGER_ISSUE=184 AGENT_LEDGER_REPO=/repo ./agent-ledger-openclaw.sh run
   AGENT_LEDGER_REPO=/repo ./agent-ledger-openclaw.sh execute 20260102-120000-issue-184
@@ -108,6 +110,15 @@ main() {
   require_bins
 
   case "$cmd" in
+    check)
+      require_bins
+      agent-ledger --version 2>&1 | head -n 1
+      if ! gh auth status >/dev/null 2>&1; then
+        echo "gh: not authenticated. Set GH_TOKEN or GITHUB_TOKEN in this environment, or run gh auth login on the host." >&2
+        exit 1
+      fi
+      echo "ok: required tools on PATH, gh session active"
+      ;;
     preview)
       require_cursor_key
       { printf '%s\0' run; common_issue_args; printf '%s\0' --dry-run --json; } | run_with_nul_args

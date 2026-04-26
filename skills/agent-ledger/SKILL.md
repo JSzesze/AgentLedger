@@ -1,6 +1,15 @@
 ---
 name: agent-ledger
 description: Interpret GitHub issues into AgentLedger work orders, run or preview AgentLedger non-interactively against a local repository clone, and inspect archived AgentLedger runs. Use when the user asks to process a GitHub issue with AgentLedger, preview a dry run, execute a saved run, run doctor or preflight checks, or list AgentLedger paper trail archives.
+user-invocable: true
+metadata:
+  openclaw:
+    requires:
+      bins: [agent-ledger, gh, git]
+    apiKey:
+      source: env
+      provider: default
+      id: CURSOR_API_KEY
 ---
 
 # AgentLedger
@@ -12,8 +21,25 @@ Use the `agent-ledger` CLI to turn GitHub issues into structured work orders, op
 - Ensure `agent-ledger`, `gh`, and `git` are available where the command runs.
 - Ensure `CURSOR_API_KEY` is set where the command runs.
 - Use an existing local clone for `--repo`.
-- Ensure `gh` is authenticated when reading issues or posting comments.
-- In sandboxed runs, install the binaries and provide `CURSOR_API_KEY` inside the sandbox too.
+- Ensure `gh` is authenticated when reading issues or posting comments. In CI and many OpenClaw sandboxes there is no interactive login: set **`GH_TOKEN` or `GITHUB_TOKEN`** in the same environment as the skill (GitHub’s accepted names for the CLI).
+- In sandboxed runs, install the binaries and provide `CURSOR_API_KEY` and (if needed) `GH_TOKEN` inside the sandbox too.
+
+## Gateway or chat → one run
+
+Set paths from the user’s message, then call the helper (absolute `<skill-dir>` is the folder containing this `SKILL.md`):
+
+```bash
+export CURSOR_API_KEY=…
+export AGENT_LEDGER_ISSUE="https://github.com/org/repo/issues/184"   # or issue number in that repo
+export AGENT_LEDGER_REPO="/path/to/local/clone"
+<skill-dir>/scripts/agent-ledger-openclaw.sh preview   # interpretation only
+# or
+<skill-dir>/scripts/agent-ledger-openclaw.sh run      # full run, still --no-post unless AGENT_LEDGER_POST=true
+```
+
+**Preflight (bins + `gh` auth) without a repo or issue:** `<skill-dir>/scripts/agent-ledger-openclaw.sh check`
+
+**Drop-in config for OpenClaw** (merge with your `openclaw.json`): `openclaw.config.example.json5` next to this file.
 
 ## Safety defaults
 
@@ -80,7 +106,7 @@ agent-ledger doctor --repo "/path/to/local/clone" --issue "184" --json
 
 ## Helper and reference files
 
-- Use `scripts/agent-ledger-openclaw.sh` for the common preview, run, interpret, execute, list, and doctor flows.
+- Use `scripts/agent-ledger-openclaw.sh` for `check`, preview, run, interpret, execute, list, and doctor.
 - Read `references/cli.md` when you need the helper environment variables, direct CLI variants, exit codes, or the JSON contract.
 
 ## Output handling

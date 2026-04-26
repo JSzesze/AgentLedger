@@ -61,14 +61,16 @@ agent-ledger run \
 ## Environment
 
 - `CURSOR_API_KEY` must be available in the environment the skill uses.
-- `gh` should be authenticated if you resolve issues or post comments.
-- In sandboxed OpenClaw runs, `agent-ledger`, `gh`, `git`, and `CURSOR_API_KEY` must also exist inside the sandbox. Host skill env injection does not automatically populate sandbox environments.
+- `gh` should be authenticated if you resolve issues or post comments. In sandboxes and CI there is often no TTY: set **`GH_TOKEN` or `GITHUB_TOKEN`** (GitHub-accepted) in the same environment the skill uses.
+- In sandboxed OpenClaw runs, `agent-ledger`, `gh`, `git`, `CURSOR_API_KEY`, and (when needed) `GH_TOKEN` must exist inside the sandbox. Host skill env injection does not automatically populate sandbox environments.
 
 ## OpenClaw Skill Install
 
 For workspace-local use, keep this repository's `skills/agent-ledger/` folder under the OpenClaw workspace. OpenClaw exposes user-invocable skills through `/skill agent-ledger ...` and, where supported, native skill slash commands such as `/agent-ledger`.
 
 If installing from another checkout, copy or sync `skills/agent-ledger/` into one of OpenClaw's skill roots, such as workspace `skills/` or `~/.openclaw/skills/`.
+
+Drop-in file (same content as below): [`../skills/agent-ledger/openclaw.config.example.json5`](../skills/agent-ledger/openclaw.config.example.json5).
 
 Example config override:
 
@@ -95,9 +97,10 @@ See [archive-contract.md](archive-contract.md) for the file layout. List runs fr
 
 In the snippets below, **`<skill-dir>`** is the **absolute** path to the `agent-ledger` skill directory: the folder that contains `SKILL.md` and `scripts/` (for example, the `skills/agent-ledger` folder in a clone of this repository, or the same layout under your OpenClaw workspace’s `skills/` root).
 
-The skill includes a helper modeled after OpenClaw skills that ship scripts:
+The skill includes a helper modeled after OpenClaw skills that ship scripts. **`check`** verifies `agent-ledger`, `gh`, and `git` on `PATH` and that `gh` has an active session (set `GH_TOKEN` in sandboxes if needed):
 
 ```bash
+<skill-dir>/scripts/agent-ledger-openclaw.sh check
 <skill-dir>/scripts/agent-ledger-openclaw.sh preview
 <skill-dir>/scripts/agent-ledger-openclaw.sh run
 <skill-dir>/scripts/agent-ledger-openclaw.sh execute "<run-id>"

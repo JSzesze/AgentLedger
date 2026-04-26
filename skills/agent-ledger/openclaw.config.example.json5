@@ -1,0 +1,13 @@
+// Example fragment for openclaw.json (or your gateway config merge).
+// Copy into skills.entries. See docs/openclaw.md at the AgentLedger repository root.
+// Ensure the same process environment provides CURSOR_API_KEY (and GH_TOKEN for non-interactive gh in sandboxes).
+{
+  skills: {
+    entries: {
+      "agent-ledger": {
+        enabled: true,
+        apiKey: { source: "env", provider: "default", id: "CURSOR_API_KEY" },
+      },
+    },
+  },
+}

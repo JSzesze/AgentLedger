@@ -9,6 +9,11 @@ Use this reference when the compact skill instructions are not enough.
 - `CURSOR_API_KEY`: Cursor API key for the `agent-ledger` process.
 - `AGENT_LEDGER_POST=true`: post interpretation/completion to GitHub (assigned worker or explicit “post to issue”). If unset, the helper uses `--no-post` by default.
 - `AGENT_LEDGER_CHECK`: one check command for the helper wrapper. Call `agent-ledger` directly when multiple `--check` flags are needed.
+- `GH_TOKEN` or `GITHUB_TOKEN` (optional): for headless or sandboxed `gh` when `gh auth login` is not used.
+
+## OpenClaw config
+
+A merge-ready fragment is `openclaw.config.example.json5` in the skill directory (see `docs/openclaw.md` at repository root).
 
 ## Helper
 
@@ -17,6 +22,7 @@ Let `<skill-dir>` mean the absolute path to this skill directory.
 Prefer the helper for normal OpenClaw usage:
 
 ```bash
+<skill-dir>/scripts/agent-ledger-openclaw.sh check
 <skill-dir>/scripts/agent-ledger-openclaw.sh preview
 <skill-dir>/scripts/agent-ledger-openclaw.sh run
 <skill-dir>/scripts/agent-ledger-openclaw.sh interpret
@@ -24,6 +30,8 @@ Prefer the helper for normal OpenClaw usage:
 <skill-dir>/scripts/agent-ledger-openclaw.sh list 20
 <skill-dir>/scripts/agent-ledger-openclaw.sh doctor
 ```
+
+`check` does not need `AGENT_LEDGER_REPO` or `AGENT_LEDGER_ISSUE` or `CURSOR_API_KEY`. It only verifies `PATH` and `gh auth` (set `GH_TOKEN` in sandboxes as needed).
 
 ## Direct CLI
 

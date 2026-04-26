@@ -4,6 +4,8 @@ The repository includes a ready-to-use OpenClaw skill at [`../skills/agent-ledge
 
 **`<skill-dir>`** in the command examples is the **absolute** path to that skill folder (the directory containing `SKILL.md` and `scripts/`), e.g. `.../AgentLedger/skills/agent-ledger` on disk.
 
+**OpenClaw config:** copy or merge `openclaw.config.example.json5` from the same directory into your gateway’s `openclaw.json`. The skill’s `SKILL.md` frontmatter also lists required binaries and `CURSOR_API_KEY`.
+
 ## Minimal `SKILL.md` Frontmatter
 
 ```markdown
@@ -35,6 +37,14 @@ Run the **AgentLedger** CLI from a skill or exec environment so issues get inter
 | `AGENT_LEDGER_ISSUE` | `https://github.com/org/repo/issues/42` | Issue to process |
 | `AGENT_LEDGER_REPO` | `/home/user/projects/repo` | Local clone |
 | `CURSOR_API_KEY` | `(secret)` | Cursor API |
+
+## Command (check tools and gh auth, no issue yet)
+
+For sandboxes, set `GH_TOKEN` (or `GITHUB_TOKEN`) in the same environment if `gh` is not logged in interactively.
+
+```bash
+<skill-dir>/scripts/agent-ledger-openclaw.sh check
+```
 
 ## Command (preview, no Cursor run)
 
