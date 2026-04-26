@@ -93,6 +93,8 @@ See [archive-contract.md](archive-contract.md) for the file layout. List runs fr
 
 ## Skill Command Pattern
 
+In the snippets below, **`<skill-dir>`** is the **absolute** path to the `agent-ledger` skill directory: the folder that contains `SKILL.md` and `scripts/` (for example, the `skills/agent-ledger` folder in a clone of this repository, or the same layout under your OpenClaw workspace’s `skills/` root).
+
 The skill includes a helper modeled after OpenClaw skills that ship scripts:
 
 ```bash

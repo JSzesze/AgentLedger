@@ -2,6 +2,8 @@
 
 The repository includes a ready-to-use OpenClaw skill at [`../skills/agent-ledger/SKILL.md`](../skills/agent-ledger/SKILL.md). This file is an operator-oriented copy/paste reference for the same workflow.
 
+**`<skill-dir>`** in the command examples is the **absolute** path to that skill folder (the directory containing `SKILL.md` and `scripts/`), e.g. `.../AgentLedger/skills/agent-ledger` on disk.
+
 ## Minimal `SKILL.md` Frontmatter
 
 ```markdown
